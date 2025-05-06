@@ -184,7 +184,7 @@ export function CreateItemDialog({ isOpen, setIsOpen, itemType, onCreateItem, fo
               value={selectedFolder || "none"}
               onValueChange={(value) => setSelectedFolder(value === "none" ? null : value)}
             >
-              <SelectTrigger>
+              <SelectTrigger id="folder">
                 <SelectValue placeholder="Select a folder" />
               </SelectTrigger>
               <SelectContent>
