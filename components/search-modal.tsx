@@ -1,7 +1,6 @@
 "use client"
 
 import { useState, useEffect, useRef } from "react"
-import { Dialog, DialogContent } from "@/components/ui/dialog"
 import { Input } from "@/components/ui/input"
 import type { Item } from "@/lib/types"
 import { Search, File, FileText, LinkIcon, ImageIcon, Tag, X } from "lucide-react"
@@ -43,8 +42,9 @@ export function SearchModal({ isOpen, setIsOpen, items, onItemSelect }: SearchMo
     const matchesContent = item.content?.toLowerCase().includes(query)
     const matchesTags = item.tags?.some((tag) => tag.toLowerCase().includes(query))
     const matchesFolder = item.folder?.toLowerCase().includes(query)
+    const matchesType = item.type.toLowerCase().includes(query)
 
-    return matchesTitle || matchesContent || matchesTags || matchesFolder
+    return matchesTitle || matchesContent || matchesTags || matchesFolder || matchesType
   })
 
   // Handle keyboard navigation
@@ -94,84 +94,101 @@ export function SearchModal({ isOpen, setIsOpen, items, onItemSelect }: SearchMo
     }
   }
 
+  if (!isOpen) return null
+
   return (
-    <Dialog open={isOpen} onOpenChange={setIsOpen}>
-      <DialogContent className="sm:max-w-[550px] p-0 gap-0 overflow-hidden fixed top-1/5 left-1/2 -translate-x-1/2 -translate-y-1/2">
-        <div className="relative">
-          <Search className="absolute left-4 top-3.5 h-5 w-5 text-muted-foreground" />
-          <Input
-            ref={inputRef}
-            value={searchQuery}
-            onChange={(e) => {
-              setSearchQuery(e.target.value)
-              setActiveIndex(0)
-            }}
-            placeholder="Find or create a note..."
-            className="border-0 focus-visible:ring-0 focus-visible:ring-offset-0 rounded-none pl-12 h-12 text-base"
-          />
-          {searchQuery && (
-            <button
-              className="absolute right-4 top-3.5 text-muted-foreground hover:text-foreground"
-              onClick={() => setSearchQuery("")}
-            >
-              <X className="h-5 w-5" />
-              <span className="sr-only">Clear search</span>
-            </button>
-          )}
-        </div>
+    <>
+      {/* Overlay with darkened background */}
+      <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm" onClick={() => setIsOpen(false)} />
 
-        <ScrollArea className="max-h-[300px] overflow-auto">
-          {filteredItems.length > 0 ? (
-            <div className="py-2">
-              {filteredItems.map((item, index) => (
-                <div
-                  key={item.id}
-                  className={cn(
-                    "px-4 py-2 cursor-pointer flex items-start gap-3",
-                    index === activeIndex ? "bg-muted" : "hover:bg-muted/50",
-                  )}
-                  onClick={() => onItemSelect(item)}
-                  onMouseEnter={() => setActiveIndex(index)}
-                >
-                  {getItemIcon(item.type)}
-                  <div className="flex-1 min-w-0">
-                    <div className="font-medium truncate">{item.title}</div>
-                    {item.folder && <div className="text-xs text-muted-foreground truncate">{item.folder}</div>}
-                    {item.tags && item.tags.length > 0 && (
-                      <div className="flex flex-wrap gap-1 mt-1">
-                        {item.tags.map((tag) => (
-                          <Badge key={tag} variant="outline" className="text-xs py-0 px-1">
-                            <Tag className="h-3 w-3 mr-1" />
-                            {tag}
-                          </Badge>
-                        ))}
-                      </div>
+      {/* Search modal */}
+      <div className="fixed inset-0 z-50 flex items-start justify-center pt-[80px] pointer-events-none">
+        <div
+          className="w-full max-w-[550px] bg-background rounded-md shadow-lg overflow-hidden pointer-events-auto"
+          onClick={(e) => e.stopPropagation()}
+        >
+          <div className="relative">
+            <Search className="absolute left-4 top-3.5 h-5 w-5 text-muted-foreground" />
+            <Input
+              ref={inputRef}
+              value={searchQuery}
+              onChange={(e) => {
+                setSearchQuery(e.target.value)
+                setActiveIndex(0)
+              }}
+              placeholder="Find or create a note..."
+              className="border-0 focus-visible:ring-0 focus-visible:ring-offset-0 rounded-none pl-12 h-12 text-base"
+            />
+            {searchQuery && (
+              <button
+                className="absolute right-4 top-3.5 text-muted-foreground hover:text-foreground"
+                onClick={(e) => {
+                  e.stopPropagation()
+                  setSearchQuery("")
+                }}
+              >
+                <X className="h-5 w-5" />
+                <span className="sr-only">Clear search</span>
+              </button>
+            )}
+          </div>
+
+          <ScrollArea className="max-h-[300px] overflow-auto">
+            {filteredItems.length > 0 ? (
+              <div className="py-2">
+                {filteredItems.map((item, index) => (
+                  <div
+                    key={item.id}
+                    className={cn(
+                      "px-4 py-2 cursor-pointer flex items-start gap-3",
+                      index === activeIndex ? "bg-muted" : "hover:bg-muted/50",
                     )}
+                    onClick={(e) => {
+                      e.stopPropagation()
+                      onItemSelect(item)
+                    }}
+                    onMouseEnter={() => setActiveIndex(index)}
+                  >
+                    {getItemIcon(item.type)}
+                    <div className="flex-1 min-w-0">
+                      <div className="font-medium truncate">{item.title}</div>
+                      {item.folder && <div className="text-xs text-muted-foreground truncate">{item.folder}</div>}
+                      {item.tags && item.tags.length > 0 && (
+                        <div className="flex flex-wrap gap-1 mt-1">
+                          {item.tags.map((tag) => (
+                            <Badge key={tag} variant="outline" className="text-xs py-0 px-1">
+                              <Tag className="h-3 w-3 mr-1" />
+                              {tag}
+                            </Badge>
+                          ))}
+                        </div>
+                      )}
+                    </div>
                   </div>
-                </div>
-              ))}
-            </div>
-          ) : searchQuery ? (
-            <div className="px-4 py-8 text-center text-muted-foreground">No matches found</div>
-          ) : null}
-        </ScrollArea>
+                ))}
+              </div>
+            ) : searchQuery ? (
+              <div className="px-4 py-8 text-center text-muted-foreground">No matches found</div>
+            ) : null}
+          </ScrollArea>
 
-        <div className="border-t border-border px-4 py-2 text-xs text-muted-foreground flex flex-wrap gap-x-4 gap-y-1">
-          <div className="flex items-center">
-            <kbd className="px-1.5 py-0.5 bg-muted border rounded text-xs mr-1">↑</kbd>
-            <kbd className="px-1.5 py-0.5 bg-muted border rounded text-xs mr-1">↓</kbd>
-            to navigate
-          </div>
-          <div className="flex items-center">
-            <kbd className="px-1.5 py-0.5 bg-muted border rounded text-xs mr-1">Enter</kbd>
-            to open
-          </div>
-          <div className="flex items-center">
-            <kbd className="px-1.5 py-0.5 bg-muted border rounded text-xs mr-1">Esc</kbd>
-            to dismiss
+          <div className="border-t border-border px-4 py-2 text-xs text-muted-foreground flex flex-wrap gap-x-4 gap-y-1">
+            <div className="flex items-center">
+              <kbd className="px-1.5 py-0.5 bg-muted border rounded text-xs mr-1">↑</kbd>
+              <kbd className="px-1.5 py-0.5 bg-muted border rounded text-xs mr-1">↓</kbd>
+              to navigate
+            </div>
+            <div className="flex items-center">
+              <kbd className="px-1.5 py-0.5 bg-muted border rounded text-xs mr-1">Enter</kbd>
+              to open
+            </div>
+            <div className="flex items-center">
+              <kbd className="px-1.5 py-0.5 bg-muted border rounded text-xs mr-1">Esc</kbd>
+              to dismiss
+            </div>
           </div>
         </div>
-      </DialogContent>
-    </Dialog>
+      </div>
+    </>
   )
 }

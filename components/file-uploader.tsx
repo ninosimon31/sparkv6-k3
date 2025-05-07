@@ -10,14 +10,17 @@ import type { ItemType } from "@/lib/types"
 interface FileUploaderProps {
   type: ItemType
   onFileSelected: (file: File) => void
+  disabled?: boolean
 }
 
-export function FileUploader({ type, onFileSelected }: FileUploaderProps) {
+export function FileUploader({ type, onFileSelected, disabled = false }: FileUploaderProps) {
   const [selectedFile, setSelectedFile] = useState<File | null>(null)
   const [preview, setPreview] = useState<string | null>(null)
   const fileInputRef = useRef<HTMLInputElement>(null)
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (disabled) return
+
     const file = e.target.files?.[0]
     if (!file) return
 
@@ -37,6 +40,7 @@ export function FileUploader({ type, onFileSelected }: FileUploaderProps) {
   }
 
   const handleClick = () => {
+    if (disabled) return
     fileInputRef.current?.click()
   }
 
@@ -44,11 +48,20 @@ export function FileUploader({ type, onFileSelected }: FileUploaderProps) {
 
   return (
     <div className="grid gap-4">
-      <input type="file" ref={fileInputRef} onChange={handleFileChange} accept={acceptedTypes} className="hidden" />
+      <input
+        type="file"
+        ref={fileInputRef}
+        onChange={handleFileChange}
+        accept={acceptedTypes}
+        className="hidden"
+        disabled={disabled}
+      />
 
       {!selectedFile ? (
         <div
-          className="border-2 border-dashed rounded-lg p-8 text-center cursor-pointer hover:bg-muted/50 transition-colors"
+          className={`border-2 border-dashed rounded-lg p-8 text-center ${
+            disabled ? "opacity-50 cursor-not-allowed" : "cursor-pointer hover:bg-muted/50"
+          } transition-colors`}
           onClick={handleClick}
         >
           <div className="flex flex-col items-center gap-2">
@@ -82,7 +95,7 @@ export function FileUploader({ type, onFileSelected }: FileUploaderProps) {
           )}
 
           <div className="mt-4 flex justify-end">
-            <Button variant="outline" size="sm" onClick={handleClick}>
+            <Button variant="outline" size="sm" onClick={handleClick} disabled={disabled}>
               <Upload className="h-4 w-4 mr-2" />
               Change file
             </Button>

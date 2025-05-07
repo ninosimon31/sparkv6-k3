@@ -1,5 +1,7 @@
 "use client"
 
+import type React from "react"
+
 import { useState } from "react"
 import {
   Home,
@@ -13,11 +15,17 @@ import {
   Search,
   ChevronDown,
   ChevronRight,
+  FolderPlus,
+  TagIcon as TagPlus,
+  Edit,
 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { ScrollArea } from "@/components/ui/scroll-area"
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu"
-import type { ViewType, ItemType } from "@/lib/types"
+import { Input } from "@/components/ui/input"
+import { FolderTree } from "@/components/folder-tree"
+import { FolderEditModal } from "@/components/folder-edit-modal"
+import type { ViewType, ItemType, FolderStructure, Item, FolderAction } from "@/lib/types"
 
 interface SidebarProps {
   selectedView: ViewType
@@ -26,11 +34,19 @@ interface SidebarProps {
   setSelectedFolder: (folder: string | null) => void
   selectedTag: string | null
   setSelectedTag: (tag: string | null) => void
-  folders: string[]
+  folderStructure: FolderStructure[]
   tags: string[]
   onCreateItem: (type: ItemType) => void
   setSearchQuery: (query: string) => void
   onOpenSearch: () => void
+  onAddFolder: (folderPath: string, parentId: string | null) => void
+  onRenameFolder: (id: string, newName: string) => void
+  onMoveFolder: (id: string, newParentId: string | null) => void
+  onDeleteFolder: (id: string) => void
+  onCustomizeFolder: (id: string, color: string, icon: string) => void
+  onAddTag: (tagName: string) => void
+  getItemsByFolder: (folderPath: string) => Item[]
+  findFolderById: (id: string) => FolderStructure | null
 }
 
 export function Sidebar({
@@ -40,14 +56,30 @@ export function Sidebar({
   setSelectedFolder,
   selectedTag,
   setSelectedTag,
-  folders,
+  folderStructure,
   tags,
   onCreateItem,
   setSearchQuery,
   onOpenSearch,
+  onAddFolder,
+  onRenameFolder,
+  onMoveFolder,
+  onDeleteFolder,
+  onCustomizeFolder,
+  onAddTag,
+  getItemsByFolder,
+  findFolderById,
 }: SidebarProps) {
   const [isFoldersExpanded, setIsFoldersExpanded] = useState(true)
   const [isTagsExpanded, setIsTagsExpanded] = useState(true)
+  const [newTagName, setNewTagName] = useState("")
+  const [isAddingTag, setIsAddingTag] = useState(false)
+  const [isEditMode, setIsEditMode] = useState(false)
+
+  // Folder edit modal state
+  const [isEditModalOpen, setIsEditModalOpen] = useState(false)
+  const [currentAction, setCurrentAction] = useState<FolderAction>("create")
+  const [currentFolder, setCurrentFolder] = useState<FolderStructure | null>(null)
 
   const handleViewSelect = (view: ViewType) => {
     setSelectedView(view)
@@ -55,8 +87,8 @@ export function Sidebar({
     setSelectedTag(null)
   }
 
-  const handleFolderSelect = (folder: string) => {
-    setSelectedFolder(folder)
+  const handleFolderSelect = (folderPath: string) => {
+    setSelectedFolder(folderPath)
     setSelectedView("all")
     setSelectedTag(null)
   }
@@ -65,6 +97,30 @@ export function Sidebar({
     setSelectedTag(tag)
     setSelectedView("all")
     setSelectedFolder(null)
+  }
+
+  const handleAddTag = () => {
+    setIsAddingTag(true)
+  }
+
+  const handleTagNameSubmit = (e: React.FormEvent) => {
+    e.preventDefault()
+    if (newTagName.trim()) {
+      onAddTag(newTagName.trim())
+      setNewTagName("")
+      setIsAddingTag(false)
+    }
+  }
+
+  const handleFolderAction = (action: FolderAction, folder: FolderStructure | null) => {
+    setCurrentAction(action)
+    setCurrentFolder(folder)
+    setIsEditModalOpen(true)
+  }
+
+  const handleEditModalClose = () => {
+    setIsEditModalOpen(false)
+    setCurrentFolder(null)
   }
 
   return (
@@ -151,44 +207,91 @@ export function Sidebar({
           </nav>
 
           <div className="mt-6">
-            <button
-              className="flex items-center w-full text-sm font-medium p-2 hover:bg-muted rounded-md"
-              onClick={() => setIsFoldersExpanded(!isFoldersExpanded)}
-            >
-              {isFoldersExpanded ? <ChevronDown className="h-4 w-4 mr-1" /> : <ChevronRight className="h-4 w-4 mr-1" />}
-              <Folder className="h-4 w-4 mr-2" />
-              <span>Folders</span>
-            </button>
+            <div className="flex items-center justify-between mb-1">
+              <button
+                className="flex items-center text-sm font-medium p-2 hover:bg-muted rounded-md"
+                onClick={() => setIsFoldersExpanded(!isFoldersExpanded)}
+              >
+                {isFoldersExpanded ? (
+                  <ChevronDown className="h-4 w-4 mr-1" />
+                ) : (
+                  <ChevronRight className="h-4 w-4 mr-1" />
+                )}
+                <Folder className="h-4 w-4 mr-2" />
+                <span>Folders</span>
+              </button>
+              <div className="flex items-center">
+                <Button
+                  variant={isEditMode ? "secondary" : "ghost"}
+                  size="icon"
+                  className="h-7 w-7"
+                  onClick={() => setIsEditMode(!isEditMode)}
+                >
+                  <Edit className="h-4 w-4" />
+                  <span className="sr-only">{isEditMode ? "Exit Edit Mode" : "Edit Folders"}</span>
+                </Button>
+                {isEditMode && (
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    className="h-7 w-7"
+                    onClick={() => handleFolderAction("create", null)}
+                  >
+                    <FolderPlus className="h-4 w-4" />
+                    <span className="sr-only">Add folder</span>
+                  </Button>
+                )}
+              </div>
+            </div>
 
             {isFoldersExpanded && (
-              <div className="ml-6 mt-1 space-y-1">
-                {folders.map((folder) => (
-                  <Button
-                    key={folder}
-                    variant={selectedFolder === folder ? "secondary" : "ghost"}
-                    className="w-full justify-start text-sm h-8"
-                    onClick={() => handleFolderSelect(folder)}
-                  >
-                    {folder}
-                  </Button>
-                ))}
-                {folders.length === 0 && <p className="text-xs text-muted-foreground px-2 py-1">No folders yet</p>}
+              <div className="ml-2 mt-1">
+                <FolderTree
+                  folders={folderStructure}
+                  selectedFolder={selectedFolder}
+                  onSelectFolder={handleFolderSelect}
+                  onFolderAction={handleFolderAction}
+                  getItemsByFolder={getItemsByFolder}
+                  isEditMode={isEditMode}
+                />
               </div>
             )}
           </div>
 
           <div className="mt-4">
-            <button
-              className="flex items-center w-full text-sm font-medium p-2 hover:bg-muted rounded-md"
-              onClick={() => setIsTagsExpanded(!isTagsExpanded)}
-            >
-              {isTagsExpanded ? <ChevronDown className="h-4 w-4 mr-1" /> : <ChevronRight className="h-4 w-4 mr-1" />}
-              <Tag className="h-4 w-4 mr-2" />
-              <span>Tags</span>
-            </button>
+            <div className="flex items-center justify-between mb-1">
+              <button
+                className="flex items-center text-sm font-medium p-2 hover:bg-muted rounded-md"
+                onClick={() => setIsTagsExpanded(!isTagsExpanded)}
+              >
+                {isTagsExpanded ? <ChevronDown className="h-4 w-4 mr-1" /> : <ChevronRight className="h-4 w-4 mr-1" />}
+                <Tag className="h-4 w-4 mr-2" />
+                <span>Tags</span>
+              </button>
+              <Button variant="ghost" size="icon" className="h-7 w-7" onClick={handleAddTag}>
+                <TagPlus className="h-4 w-4" />
+                <span className="sr-only">Add tag</span>
+              </Button>
+            </div>
 
             {isTagsExpanded && (
               <div className="ml-6 mt-1 space-y-1">
+                {isAddingTag && (
+                  <form onSubmit={handleTagNameSubmit} className="flex items-center mb-2">
+                    <Input
+                      value={newTagName}
+                      onChange={(e) => setNewTagName(e.target.value)}
+                      placeholder="Tag name"
+                      className="h-7 text-sm"
+                      autoFocus
+                      onBlur={() => {
+                        if (!newTagName.trim()) {
+                          setIsAddingTag(false)
+                        }
+                      }}
+                    />
+                  </form>
+                )}
                 {tags.map((tag) => (
                   <Button
                     key={tag}
@@ -199,12 +302,27 @@ export function Sidebar({
                     {tag}
                   </Button>
                 ))}
-                {tags.length === 0 && <p className="text-xs text-muted-foreground px-2 py-1">No tags yet</p>}
+                {tags.length === 0 && !isAddingTag && (
+                  <p className="text-xs text-muted-foreground px-2 py-1">No tags yet</p>
+                )}
               </div>
             )}
           </div>
         </div>
       </ScrollArea>
+
+      <FolderEditModal
+        isOpen={isEditModalOpen}
+        onClose={handleEditModalClose}
+        action={currentAction}
+        folder={currentFolder}
+        folderStructure={folderStructure}
+        onCreateFolder={onAddFolder}
+        onRenameFolder={onRenameFolder}
+        onDeleteFolder={onDeleteFolder}
+        onMoveFolder={onMoveFolder}
+        onCustomizeFolder={onCustomizeFolder}
+      />
     </div>
   )
 }

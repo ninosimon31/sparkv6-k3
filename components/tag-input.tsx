@@ -2,23 +2,36 @@
 
 import type React from "react"
 
-import { useState } from "react"
+import { useState, useEffect, useRef } from "react"
 import { X, Plus } from "lucide-react"
 import { Badge } from "@/components/ui/badge"
 import { Input } from "@/components/ui/input"
 import { Button } from "@/components/ui/button"
-import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from "@/components/ui/command"
-import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
 
 interface TagInputProps {
   tags: string[]
   setTags: (tags: string[]) => void
   availableTags: string[]
+  disabled?: boolean
 }
 
-export function TagInput({ tags, setTags, availableTags }: TagInputProps) {
+export function TagInput({ tags, setTags, availableTags, disabled = false }: TagInputProps) {
   const [inputValue, setInputValue] = useState("")
-  const [open, setOpen] = useState(false)
+  const [suggestions, setSuggestions] = useState<string[]>([])
+  const inputRef = useRef<HTMLInputElement>(null)
+
+  // Update suggestions when input value changes
+  useEffect(() => {
+    if (inputValue.trim()) {
+      // Show all tags that start with the input value
+      const filtered = availableTags.filter(
+        (tag) => !tags.includes(tag) && tag.toLowerCase().startsWith(inputValue.toLowerCase()),
+      )
+      setSuggestions(filtered)
+    } else {
+      setSuggestions([])
+    }
+  }, [inputValue, availableTags, tags])
 
   const handleAddTag = (tag: string) => {
     const trimmedTag = tag.trim()
@@ -26,6 +39,11 @@ export function TagInput({ tags, setTags, availableTags }: TagInputProps) {
       setTags([...tags, trimmedTag])
     }
     setInputValue("")
+
+    // Focus back on the input after adding a tag
+    setTimeout(() => {
+      inputRef.current?.focus()
+    }, 10)
   }
 
   const handleRemoveTag = (tagToRemove: string) => {
@@ -39,10 +57,12 @@ export function TagInput({ tags, setTags, availableTags }: TagInputProps) {
     }
   }
 
-  // Filter available tags that aren't already selected
-  const filteredTags = availableTags.filter(
-    (tag) => !tags.includes(tag) && tag.toLowerCase().includes(inputValue.toLowerCase()),
-  )
+  // Handle clicking the + button
+  const handleAddButtonClick = () => {
+    if (inputValue) {
+      handleAddTag(inputValue)
+    }
+  }
 
   return (
     <div className="flex flex-col gap-2">
@@ -61,43 +81,35 @@ export function TagInput({ tags, setTags, availableTags }: TagInputProps) {
       <div className="flex gap-2">
         <div className="relative flex-1">
           <Input
+            ref={inputRef}
             value={inputValue}
             onChange={(e) => setInputValue(e.target.value)}
             onKeyDown={handleKeyDown}
             placeholder="Add tag..."
             className="w-full"
           />
+
+          {suggestions.length > 0 && (
+            <div className="absolute z-10 w-full mt-1 bg-background border rounded-md shadow-md">
+              <ul className="py-1">
+                {suggestions.map((suggestion) => (
+                  <li
+                    key={suggestion}
+                    className="px-3 py-2 hover:bg-muted cursor-pointer"
+                    onClick={() => handleAddTag(suggestion)}
+                  >
+                    {suggestion}
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
         </div>
 
-        <Popover open={open} onOpenChange={setOpen}>
-          <PopoverTrigger asChild>
-            <Button variant="outline" size="icon">
-              <Plus className="h-4 w-4" />
-              <span className="sr-only">Select tag</span>
-            </Button>
-          </PopoverTrigger>
-          <PopoverContent className="p-0" align="end">
-            <Command>
-              <CommandInput placeholder="Search tags..." />
-              <CommandList>
-                <CommandEmpty>No tags found.</CommandEmpty>
-                <CommandGroup>
-                  {filteredTags.map((tag) => (
-                    <CommandItem
-                      key={tag}
-                      onSelect={() => {
-                        handleAddTag(tag)
-                        setOpen(false)
-                      }}
-                    >
-                      {tag}
-                    </CommandItem>
-                  ))}
-                </CommandGroup>
-              </CommandList>
-            </Command>
-          </PopoverContent>
-        </Popover>
+        <Button variant="outline" size="icon" onClick={handleAddButtonClick}>
+          <Plus className="h-4 w-4" />
+          <span className="sr-only">Add tag</span>
+        </Button>
       </div>
     </div>
   )

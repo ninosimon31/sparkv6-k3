@@ -1,6 +1,6 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useCallback } from "react"
 import { Sidebar } from "@/components/sidebar"
 import { ContentArea } from "@/components/content-area"
 import type { ItemType, ViewType, Item } from "@/lib/types"
@@ -18,7 +18,23 @@ export function MainLayout() {
   const [selectedItem, setSelectedItem] = useState<Item | null>(null)
   const [isSearchModalOpen, setIsSearchModalOpen] = useState(false)
 
-  const { items, folders, tags, addItem, updateItem, deleteItem, isLoading } = useItems()
+  const {
+    items,
+    folderStructure,
+    tags,
+    isLoading,
+    addItem,
+    updateItem,
+    deleteItem,
+    addFolder,
+    renameFolder,
+    moveFolder,
+    deleteFolder,
+    customizeFolder,
+    addTag,
+    getItemsByFolder,
+    findFolderById,
+  } = useItems()
 
   // Filter items based on selected view, folder, tag, and search query
   const filteredItems = items.filter((item) => {
@@ -47,14 +63,70 @@ export function MainLayout() {
     return true
   })
 
-  const handleCreateItem = (type: ItemType) => {
+  const handleCreateItem = useCallback((type: ItemType) => {
     setCreateItemType(type)
     setIsCreateDialogOpen(true)
-  }
+  }, [])
 
-  const handleItemClick = (item: Item) => {
+  const handleItemClick = useCallback((item: Item | null) => {
     setSelectedItem(item)
-  }
+  }, [])
+
+  const handleAddItem = useCallback(
+    (item: Item) => {
+      try {
+        // Add the item to the collection
+        addItem(item)
+      } catch (error) {
+        console.error("Error adding item:", error)
+        // Force a refresh if there was an error
+        window.location.reload()
+      }
+    },
+    [addItem],
+  )
+
+  const handleAddFolder = useCallback(
+    (folderName: string, parentId: string | null = null) => {
+      addFolder(folderName, parentId)
+    },
+    [addFolder],
+  )
+
+  const handleRenameFolder = useCallback(
+    (id: string, newName: string) => {
+      renameFolder(id, newName)
+    },
+    [renameFolder],
+  )
+
+  const handleMoveFolder = useCallback(
+    (id: string, newParentId: string | null) => {
+      moveFolder(id, newParentId)
+    },
+    [moveFolder],
+  )
+
+  const handleDeleteFolder = useCallback(
+    (id: string) => {
+      deleteFolder(id)
+    },
+    [deleteFolder],
+  )
+
+  const handleCustomizeFolder = useCallback(
+    (id: string, color: string, icon: string) => {
+      customizeFolder(id, color, icon)
+    },
+    [customizeFolder],
+  )
+
+  const handleAddTag = useCallback(
+    (tagName: string) => {
+      addTag(tagName)
+    },
+    [addTag],
+  )
 
   return (
     <div className="flex h-screen bg-background">
@@ -65,11 +137,19 @@ export function MainLayout() {
         setSelectedFolder={setSelectedFolder}
         selectedTag={selectedTag}
         setSelectedTag={setSelectedTag}
-        folders={folders}
+        folderStructure={folderStructure}
         tags={tags}
         onCreateItem={handleCreateItem}
         setSearchQuery={setSearchQuery}
         onOpenSearch={() => setIsSearchModalOpen(true)}
+        onAddFolder={handleAddFolder}
+        onRenameFolder={handleRenameFolder}
+        onMoveFolder={handleMoveFolder}
+        onDeleteFolder={handleDeleteFolder}
+        onCustomizeFolder={handleCustomizeFolder}
+        onAddTag={handleAddTag}
+        getItemsByFolder={getItemsByFolder}
+        findFolderById={findFolderById}
       />
       <ContentArea
         items={filteredItems}
@@ -84,8 +164,8 @@ export function MainLayout() {
         isOpen={isCreateDialogOpen}
         setIsOpen={setIsCreateDialogOpen}
         itemType={createItemType}
-        onCreateItem={addItem}
-        folders={folders}
+        onCreateItem={handleAddItem}
+        folderStructure={folderStructure}
         tags={tags}
       />
       <SearchModal

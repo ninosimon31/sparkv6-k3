@@ -19,4 +19,18 @@ export interface Item {
   folder?: string | null
   linkedItems?: Item[]
   backlinks?: Item[]
+  color?: string
+  icon?: string
 }
+
+export interface FolderStructure {
+  id: string
+  name: string
+  path: string
+  parentId: string | null
+  children: FolderStructure[]
+  color?: string
+  icon?: string
+}
+
+export type FolderAction = "create" | "rename" | "delete" | "move" | "customize"

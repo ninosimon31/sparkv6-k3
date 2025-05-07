@@ -1,13 +1,13 @@
 "use client"
 
 import { useState, useEffect } from "react"
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog"
+import { X } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Textarea } from "@/components/ui/textarea"
 import { Label } from "@/components/ui/label"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
-import type { ItemType, Item } from "@/lib/types"
+import type { ItemType, Item, FolderStructure } from "@/lib/types"
 import { TagInput } from "@/components/tag-input"
 import { FileUploader } from "@/components/file-uploader"
 import { LinkPreviewFetcher } from "@/components/link-preview-fetcher"
@@ -17,11 +17,18 @@ interface CreateItemDialogProps {
   setIsOpen: (isOpen: boolean) => void
   itemType: ItemType
   onCreateItem: (item: Item) => void
-  folders: string[]
+  folderStructure: FolderStructure[]
   tags: string[]
 }
 
-export function CreateItemDialog({ isOpen, setIsOpen, itemType, onCreateItem, folders, tags }: CreateItemDialogProps) {
+export function CreateItemDialog({
+  isOpen,
+  setIsOpen,
+  itemType,
+  onCreateItem,
+  folderStructure,
+  tags,
+}: CreateItemDialogProps) {
   const [title, setTitle] = useState("")
   const [content, setContent] = useState("")
   const [url, setUrl] = useState("")
@@ -63,38 +70,47 @@ export function CreateItemDialog({ isOpen, setIsOpen, itemType, onCreateItem, fo
   }
 
   const handleSubmit = () => {
-    // Generate a unique ID
-    const id = `item_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`
+    try {
+      // Generate a unique ID
+      const id = `item_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`
 
-    // Create the new item
-    const newItem: Item = {
-      id,
-      type: itemType,
-      title: title || (itemType === "link" ? previewData.title : file?.name) || "Untitled",
-      content: content,
-      createdAt: new Date().toISOString(),
-      tags: selectedTags,
-      folder: selectedFolder,
-    }
-
-    // Add type-specific properties
-    if (itemType === "link") {
-      newItem.url = url
-      newItem.previewImage = previewData.image
-      newItem.previewDescription = previewData.description
-    } else if (itemType === "image" || itemType === "file") {
-      // In a real app, we would upload the file and get a URL
-      // For this demo, we'll create an object URL
-      if (file) {
-        newItem.url = URL.createObjectURL(file)
-        newItem.fileName = file.name
-        newItem.fileSize = file.size
-        newItem.fileType = file.type
+      // Create the new item
+      const newItem: Item = {
+        id,
+        type: itemType,
+        title: title || (itemType === "link" ? previewData.title : file?.name) || "Untitled",
+        content: content,
+        createdAt: new Date().toISOString(),
+        tags: selectedTags,
+        folder: selectedFolder,
       }
-    }
 
-    onCreateItem(newItem)
-    handleClose()
+      // Add type-specific properties
+      if (itemType === "link") {
+        newItem.url = url
+        newItem.previewImage = previewData.image
+        newItem.previewDescription = previewData.description
+      } else if (itemType === "image" || itemType === "file") {
+        // In a real app, we would upload the file and get a URL
+        // For this demo, we'll create an object URL
+        if (file) {
+          newItem.url = URL.createObjectURL(file)
+          newItem.fileName = file.name
+          newItem.fileSize = file.size
+          newItem.fileType = file.type
+        }
+      }
+
+      // Close the dialog
+      handleClose()
+
+      // Add the item
+      onCreateItem(newItem)
+    } catch (error) {
+      console.error("Error creating item:", error)
+      // Force a refresh if there was an error
+      window.location.reload()
+    }
   }
 
   const getDialogTitle = () => {
@@ -112,12 +128,39 @@ export function CreateItemDialog({ isOpen, setIsOpen, itemType, onCreateItem, fo
     }
   }
 
+  // Get all folder paths for the dropdown
+  const getAllFolderPaths = () => {
+    const paths: string[] = []
+
+    const traverseFolders = (folders: FolderStructure[], parentPath = "") => {
+      folders.forEach((folder) => {
+        const currentPath = parentPath ? `${parentPath}/${folder.name}` : folder.name
+        paths.push(currentPath)
+        if (folder.children.length > 0) {
+          traverseFolders(folder.children, currentPath)
+        }
+      })
+    }
+
+    traverseFolders(folderStructure)
+    return paths
+  }
+
+  const folderPaths = getAllFolderPaths()
+
+  if (!isOpen) return null
+
   return (
-    <Dialog open={isOpen} onOpenChange={setIsOpen}>
-      <DialogContent className="sm:max-w-[550px]">
-        <DialogHeader>
-          <DialogTitle>{getDialogTitle()}</DialogTitle>
-        </DialogHeader>
+    <div className="fixed inset-0 z-50 flex items-center justify-center">
+      <div className="fixed inset-0 bg-black/80" onClick={handleClose}></div>
+      <div className="relative z-50 w-full max-w-md bg-background p-6 rounded-lg shadow-lg">
+        <div className="flex justify-between items-center mb-4">
+          <h2 className="text-lg font-semibold">{getDialogTitle()}</h2>
+          <Button variant="ghost" size="icon" onClick={handleClose}>
+            <X className="h-4 w-4" />
+            <span className="sr-only">Close</span>
+          </Button>
+        </div>
 
         <div className="grid gap-4 py-4">
           {itemType === "link" ? (
@@ -189,9 +232,9 @@ export function CreateItemDialog({ isOpen, setIsOpen, itemType, onCreateItem, fo
               </SelectTrigger>
               <SelectContent>
                 <SelectItem value="none">None</SelectItem>
-                {folders.map((folder) => (
-                  <SelectItem key={folder} value={folder}>
-                    {folder}
+                {folderPaths.map((path) => (
+                  <SelectItem key={path} value={path}>
+                    {path}
                   </SelectItem>
                 ))}
               </SelectContent>
@@ -204,13 +247,15 @@ export function CreateItemDialog({ isOpen, setIsOpen, itemType, onCreateItem, fo
           </div>
         </div>
 
-        <DialogFooter>
-          <Button variant="outline" onClick={handleClose}>
+        <div className="flex justify-end gap-2 mt-4">
+          <Button variant="outline" onClick={handleClose} type="button">
             Cancel
           </Button>
-          <Button onClick={handleSubmit}>Create</Button>
-        </DialogFooter>
-      </DialogContent>
-    </Dialog>
+          <Button onClick={handleSubmit} type="button">
+            Create
+          </Button>
+        </div>
+      </div>
+    </div>
   )
 }

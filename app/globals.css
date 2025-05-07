@@ -55,6 +55,8 @@
   }
   body {
     @apply bg-background text-foreground;
+    height: 100vh; /* Fallback */
+    height: calc(var(--vh, 1vh) * 100);
   }
 }
 
