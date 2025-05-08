@@ -28,6 +28,7 @@ import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigge
 import { Input } from "@/components/ui/input"
 import { FolderTree } from "@/components/folder-tree"
 import { FolderEditModal } from "@/components/folder-edit-modal"
+import { SettingsModal } from "@/components/settings-modal"
 import type { ViewType, ItemType, FolderStructure, Item, FolderAction } from "@/lib/types"
 import { Tooltip, TooltipTrigger, TooltipContent, TooltipProvider } from "@/components/ui/tooltip"
 import { cn } from "@/lib/utils"
@@ -90,9 +91,10 @@ export function Sidebar({
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false)
 
   const [isEditModalOpen, setIsEditModalOpen] = useState(false)
-  const [currentAction, setCurrentAction] = useState<FolderAction>("create")
   const [currentFolder, setCurrentFolder] = useState<FolderStructure | null>(null)
+  const [currentAction, setCurrentAction] = useState<FolderAction | null>(null)
   const [rootItems, setRootItems] = useState<Item[]>([])
+  const [isSettingsModalOpen, setIsSettingsModalOpen] = useState(false)
 
   const handleFolderSelect = (folderPath: string) => {
     setSelectedFolder(folderPath)
@@ -117,15 +119,19 @@ export function Sidebar({
     }
   }
 
-  const handleFolderAction = (action: FolderAction, folder: FolderStructure | null) => {
+  const handleFolderAction = (action: FolderAction, folder?: FolderStructure | null) => {
+    setCurrentFolder(folder === undefined ? null : folder)
     setCurrentAction(action)
-    setCurrentFolder(folder)
     setIsEditModalOpen(true)
   }
 
   const handleEditModalClose = () => {
     setIsEditModalOpen(false)
     setCurrentFolder(null)
+  }
+
+  const toggleSettingsModal = () => {
+    setIsSettingsModalOpen(!isSettingsModalOpen)
   }
 
   useEffect(() => {
@@ -378,7 +384,7 @@ export function Sidebar({
         <div className="p-2 border-t border-border">
           <Tooltip>
             <TooltipTrigger asChild>
-              <Button variant="ghost" className="w-full justify-start">
+              <Button variant="ghost" className="w-full justify-start" onClick={toggleSettingsModal}>
                 <Settings2 className="h-4 w-4 mr-2" /> Settings
               </Button>
             </TooltipTrigger>
@@ -386,19 +392,26 @@ export function Sidebar({
           </Tooltip>
         </div>
 
-        <FolderEditModal
-          isOpen={isEditModalOpen}
-          onClose={handleEditModalClose}
-          action={currentAction}
-          folder={currentFolder}
-          folderStructure={folderStructure}
-          onCreateFolder={onAddFolder}
-          onRenameFolder={onRenameFolder}
-          onDeleteFolder={onDeleteFolder}
-          onMoveFolder={(folderId, newParentId) => {
-            console.log("Move folder action in modal:", folderId, newParentId)
-          }}
-          onCustomizeFolder={onCustomizeFolder}
+        {currentAction && (
+          <FolderEditModal
+            isOpen={isEditModalOpen}
+            onClose={handleEditModalClose}
+            action={currentAction}
+            folder={currentFolder}
+            folderStructure={folderStructure}
+            onCreateFolder={onAddFolder}
+            onRenameFolder={onRenameFolder}
+            onDeleteFolder={onDeleteFolder}
+            onMoveFolder={(folderId, newParentId) => {
+              console.log("Move folder action in modal:", folderId, newParentId)
+            }}
+            onCustomizeFolder={onCustomizeFolder}
+          />
+        )}
+
+        <SettingsModal 
+          isOpen={isSettingsModalOpen} 
+          onClose={toggleSettingsModal} 
         />
       </div>
     </TooltipProvider>
