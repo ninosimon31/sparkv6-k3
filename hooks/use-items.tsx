@@ -514,6 +514,52 @@ export function useItems() {
     [items],
   )
 
+  const moveItem = useCallback(
+    (itemId: string, newFolderPath: string | null) => {
+      setItems((prevItems) =>
+        prevItems.map((item) =>
+          item.id === itemId ? { ...item, folder: newFolderPath, updatedAt: new Date().toISOString() } : item
+        )
+      );
+      // Optionally, if you have a separate state for the currently selected item and it was moved,
+      // you might want to update its folder path there too or re-fetch/re-filter.
+    },
+    [setItems] // Dependencies array for useCallback
+  );
+
+  const reorderItemInFolder = useCallback(
+    (itemId: string, targetItemId: string | null, folderPath: string, position: "before" | "after") => {
+      setItems((prevItems) => {
+        const folderItems = prevItems.filter(item => item.folder === folderPath);
+        const otherItems = prevItems.filter(item => item.folder !== folderPath);
+
+        const itemToMove = folderItems.find(item => item.id === itemId);
+        if (!itemToMove) return prevItems; // Should not happen
+
+        const remainingFolderItems = folderItems.filter(item => item.id !== itemId);
+
+        let newIndex = -1;
+        if (targetItemId) {
+          const targetIndex = remainingFolderItems.findIndex(item => item.id === targetItemId);
+          if (targetIndex !== -1) {
+            newIndex = position === "before" ? targetIndex : targetIndex + 1;
+          }
+        } else {
+          // If no targetItem, it implies dropping at the beginning or end of the folder (or into an empty folder)
+          // For simplicity, let's assume dropping at the end if targetItemId is null and it's a reorder context
+          // More specific logic might be needed if dropping into an empty folder area directly
+          newIndex = remainingFolderItems.length; 
+        }
+
+        if (newIndex === -1) newIndex = remainingFolderItems.length; // Default to end if target not found
+
+        remainingFolderItems.splice(newIndex, 0, itemToMove);
+        return [...otherItems, ...remainingFolderItems.map(item => ({...item, updatedAt: new Date().toISOString()}))];
+      });
+    },
+    [setItems]
+  );
+
   return {
     items,
     folderStructure,
@@ -522,6 +568,8 @@ export function useItems() {
     addItem,
     updateItem,
     deleteItem,
+    moveItem,
+    reorderItemInFolder,
     addFolder,
     renameFolder,
     moveFolder,

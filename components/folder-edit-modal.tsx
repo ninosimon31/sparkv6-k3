@@ -1,13 +1,15 @@
 "use client"
 
 import { useState, useEffect } from "react"
-import { X, Folder, FolderPlus } from "lucide-react"
+import { X, Folder, FolderPlus, ChevronDown, ChevronRight } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group"
 import type { FolderStructure, FolderAction } from "@/lib/types"
+import { cn } from "@/lib/utils"
+import type React from 'react'
 
 interface FolderEditModalProps {
   isOpen: boolean
@@ -33,7 +35,7 @@ const FOLDER_COLORS = [
   { value: "orange", label: "Orange", class: "bg-orange-500/10 text-orange-500 border-orange-500/20" },
 ]
 
-const FOLDER_ICONS = [
+export const FOLDER_ICONS = [
   { value: "folder", label: "Folder", icon: Folder },
   { value: "folder-plus", label: "Folder Plus", icon: FolderPlus },
   { value: "folder-open", label: "Folder Open", icon: Folder },
@@ -60,6 +62,7 @@ export function FolderEditModal({
   const [selectedParentId, setSelectedParentId] = useState<string | null>(null)
   const [selectedColor, setSelectedColor] = useState("default")
   const [selectedIcon, setSelectedIcon] = useState("folder")
+  const [modalExpandedFolders, setModalExpandedFolders] = useState<Record<string, boolean>>({})
 
   useEffect(() => {
     if (isOpen && folder) {
@@ -89,33 +92,52 @@ export function FolderEditModal({
     onClose()
   }
 
-  const renderFolderOptions = (folders: FolderStructure[], level = 0) => {
-    return folders.map((f) => {
-      // Don't allow moving a folder into itself or its descendants
-      const isDisabled = folder && (f.id === folder.id || f.path.startsWith(`${folder.path}/`))
+  const toggleModalFolderExpansion = (folderId: string) => {
+    setModalExpandedFolders(prev => ({ ...prev, [folderId]: !prev[folderId] }));
+  };
 
-      return (
-        <div key={f.id}>
-          <div className="flex items-center py-1">
-            <input
-              type="radio"
-              id={f.id}
-              name="parentFolder"
-              value={f.id}
-              checked={selectedParentId === f.id}
-              onChange={() => setSelectedParentId(f.id)}
-              disabled={isDisabled}
-              className="mr-2"
-            />
-            <label htmlFor={f.id} className={`ml-${level * 4} ${isDisabled ? "text-muted-foreground" : ""}`}>
-              {f.name}
-            </label>
-          </div>
-          {f.children.length > 0 && renderFolderOptions(f.children, level + 1)}
-        </div>
-      )
-    })
-  }
+  const renderFolderOptions = (foldersToRender: FolderStructure[], level = 0): React.ReactNode[] => {
+    return foldersToRender.flatMap((f) => {
+      const isMoveDisabled = !!(action === "move" && folder && (f.id === folder.id || f.path.startsWith(`${folder.path}/`)));
+      const isSelectedAsParent = selectedParentId === f.id;
+      const IconComponent = FOLDER_ICONS.find(icon => icon.value === f.icon)?.icon || Folder;
+      const isExpandedInModal = modalExpandedFolders[f.id];
+      const hasChildren = f.children.length > 0;
+
+      return [
+        <div key={f.id} className={cn("flex items-center w-full", level > 0 && `ml-${level * 4}`)}>
+          {hasChildren ? (
+            <Button
+              variant="ghost"
+              size="icon"
+              className="h-8 w-8 flex-shrink-0 p-1 mr-1"
+              onClick={(e) => { e.stopPropagation(); toggleModalFolderExpansion(f.id); }}
+            >
+              {isExpandedInModal ? <ChevronDown className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />}
+            </Button>
+          ) : (
+            <div className="w-8 h-8 flex-shrink-0 mr-1" /> // Placeholder for alignment
+          )}
+          <Button
+            variant={isSelectedAsParent ? "secondary" : "ghost"}
+            size="sm"
+            className={cn(
+              "flex-grow justify-start h-8 text-left truncate",
+              isMoveDisabled && "opacity-50 cursor-not-allowed"
+            )}
+            onClick={() => !isMoveDisabled && setSelectedParentId(f.id)}
+            disabled={isMoveDisabled}
+            title={f.name}
+          >
+            <IconComponent className="h-4 w-4 mr-2 flex-shrink-0" />
+            <span className="truncate">{f.name}</span>
+          </Button>
+        </div>,
+        // Recursively render children if they exist AND this folder is expanded in the modal
+        ...(hasChildren && isExpandedInModal ? renderFolderOptions(f.children, level + 1) : []),
+      ];
+    });
+  };
 
   const getActionTitle = () => {
     switch (action) {
@@ -165,19 +187,18 @@ export function FolderEditModal({
           {(action === "create" || action === "move") && (
             <div>
               <Label>Parent Folder</Label>
-              <div className="mt-2 border rounded-md p-2 max-h-60 overflow-y-auto">
-                <div className="flex items-center py-1">
-                  <input
-                    type="radio"
-                    id="root"
-                    name="parentFolder"
-                    value="root"
-                    checked={selectedParentId === null}
-                    onChange={() => setSelectedParentId(null)}
-                    className="mr-2"
-                  />
-                  <label htmlFor="root">Root (No parent)</label>
-                </div>
+              <div className="mt-2 border rounded-md p-2 max-h-60 overflow-y-auto space-y-1">
+                {/* Root Option */}
+                <Button
+                  variant={selectedParentId === null ? "secondary" : "ghost"}
+                  size="sm"
+                  className="w-full justify-start h-8 text-left"
+                  onClick={() => setSelectedParentId(null)}
+                >
+                    <Folder className="h-4 w-4 mr-2 flex-shrink-0" /> 
+                    Root (No parent)
+                </Button>
+                {/* Render the folder tree */}
                 {renderFolderOptions(folderStructure)}
               </div>
             </div>

@@ -26,6 +26,8 @@ export function MainLayout() {
     addItem,
     updateItem,
     deleteItem,
+    moveItem,
+    reorderItemInFolder,
     addFolder,
     renameFolder,
     moveFolder,
@@ -45,7 +47,11 @@ export function MainLayout() {
     if (selectedView === "files" && item.type !== "file") return false
 
     // Filter by folder
-    if (selectedFolder && item.folder !== selectedFolder) return false
+    if (selectedFolder !== null) {
+      if (item.folder !== selectedFolder) return false
+    } else {
+      if (item.folder !== null) return false
+    }
 
     // Filter by tag
     if (selectedTag && !item.tags?.includes(selectedTag)) return false
@@ -68,7 +74,16 @@ export function MainLayout() {
     setIsCreateDialogOpen(true)
   }, [])
 
-  const handleItemClick = useCallback((item: Item | null) => {
+  const handleItemSelect = useCallback((itemId: string | null) => {
+    if (itemId === null) {
+      setSelectedItem(null);
+      return;
+    }
+    const itemToSelect = items.find(it => it.id === itemId);
+    setSelectedItem(itemToSelect || null);
+  }, [items]);
+
+  const handleContentAreaItemClick = useCallback((item: Item | null) => {
     setSelectedItem(item)
   }, [])
 
@@ -128,11 +143,23 @@ export function MainLayout() {
     [addTag],
   )
 
+  const handleMoveItem = useCallback(
+    (itemId: string, newFolderPath: string | null) => {
+      moveItem(itemId, newFolderPath);
+    },
+    [moveItem]
+  );
+
+  const handleReorderItemInFolder = useCallback(
+    (itemId: string, targetItemId: string | null, folderPath: string, position: "before" | "after") => {
+      reorderItemInFolder(itemId, targetItemId, folderPath, position);
+    },
+    [reorderItemInFolder]
+  );
+
   return (
     <div className="flex h-screen bg-background">
       <Sidebar
-        selectedView={selectedView}
-        setSelectedView={setSelectedView}
         selectedFolder={selectedFolder}
         setSelectedFolder={setSelectedFolder}
         selectedTag={selectedTag}
@@ -140,7 +167,6 @@ export function MainLayout() {
         folderStructure={folderStructure}
         tags={tags}
         onCreateItem={handleCreateItem}
-        setSearchQuery={setSearchQuery}
         onOpenSearch={() => setIsSearchModalOpen(true)}
         onAddFolder={handleAddFolder}
         onRenameFolder={handleRenameFolder}
@@ -150,12 +176,17 @@ export function MainLayout() {
         onAddTag={handleAddTag}
         getItemsByFolder={getItemsByFolder}
         findFolderById={findFolderById}
+        onMoveItem={handleMoveItem}
+        onReorderItem={handleReorderItemInFolder}
+        items={items}
+        onSelectItem={handleItemSelect}
+        isLoading={isLoading}
       />
       <ContentArea
         items={filteredItems}
         isLoading={isLoading}
         selectedView={selectedView}
-        onItemClick={handleItemClick}
+        onItemClick={handleContentAreaItemClick}
         selectedItem={selectedItem}
         onUpdateItem={updateItem}
         onDeleteItem={deleteItem}

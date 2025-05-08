@@ -97,7 +97,7 @@ export function EditItemDialog({ isOpen, setIsOpen, item, onUpdateItem }: EditIt
               </SelectTrigger>
               <SelectContent>
                 <SelectItem value="none">None</SelectItem>
-                {folders.map((folder) => (
+                {(folders || []).map((folder) => (
                   <SelectItem key={folder} value={folder}>
                     {folder}
                   </SelectItem>

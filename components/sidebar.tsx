@@ -1,23 +1,26 @@
 "use client"
 
 import type React from "react"
-
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import {
   Home,
   FileText,
   LinkIcon,
   ImageIcon,
-  File,
-  Folder,
-  Tag,
+  File as FileIcon,
+  Folder as FolderIcon,
+  Tag as TagIcon,
   Plus,
   Search,
   ChevronDown,
   ChevronRight,
   FolderPlus,
-  TagIcon as TagPlus,
+  TagIcon as TagPlusIcon,
   Edit,
+  ChevronLeft,
+  Settings2,
+  LayoutGrid,
+  CheckSquare,
 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { ScrollArea } from "@/components/ui/scroll-area"
@@ -26,40 +29,47 @@ import { Input } from "@/components/ui/input"
 import { FolderTree } from "@/components/folder-tree"
 import { FolderEditModal } from "@/components/folder-edit-modal"
 import type { ViewType, ItemType, FolderStructure, Item, FolderAction } from "@/lib/types"
+import { Tooltip, TooltipTrigger, TooltipContent, TooltipProvider } from "@/components/ui/tooltip"
+import { cn } from "@/lib/utils"
 
 interface SidebarProps {
-  selectedView: ViewType
-  setSelectedView: (view: ViewType) => void
+  // selectedView: ViewType // Potentially remove if not used with new design
+  // setSelectedView: (view: ViewType) => void // Potentially remove
   selectedFolder: string | null
   setSelectedFolder: (folder: string | null) => void
   selectedTag: string | null
   setSelectedTag: (tag: string | null) => void
   folderStructure: FolderStructure[]
   tags: string[]
+  items: Item[]
+  isLoading: boolean
   onCreateItem: (type: ItemType) => void
-  setSearchQuery: (query: string) => void
   onOpenSearch: () => void
-  onAddFolder: (folderPath: string, parentId: string | null) => void
+  onAddFolder: (name: string, parentId: string | null) => void
   onRenameFolder: (id: string, newName: string) => void
-  onMoveFolder: (id: string, newParentId: string | null) => void
+  onMoveFolder: (folderId: string, newParentId: string | null) => void
   onDeleteFolder: (id: string) => void
   onCustomizeFolder: (id: string, color: string, icon: string) => void
   onAddTag: (tagName: string) => void
   getItemsByFolder: (folderPath: string) => Item[]
   findFolderById: (id: string) => FolderStructure | null
+  onMoveItem: (itemId: string, newFolderPath: string | null) => void
+  onReorderItem: (itemId: string, targetItemId: string | null, folderPath: string, position: "before" | "after") => void
+  onSelectItem: (itemId: string | null) => void
 }
 
 export function Sidebar({
-  selectedView,
-  setSelectedView,
+  // selectedView,
+  // setSelectedView,
   selectedFolder,
   setSelectedFolder,
   selectedTag,
   setSelectedTag,
   folderStructure,
   tags,
+  items,
+  isLoading,
   onCreateItem,
-  setSearchQuery,
   onOpenSearch,
   onAddFolder,
   onRenameFolder,
@@ -69,37 +79,32 @@ export function Sidebar({
   onAddTag,
   getItemsByFolder,
   findFolderById,
+  onMoveItem,
+  onReorderItem,
+  onSelectItem,
 }: SidebarProps) {
   const [isFoldersExpanded, setIsFoldersExpanded] = useState(true)
   const [isTagsExpanded, setIsTagsExpanded] = useState(true)
   const [newTagName, setNewTagName] = useState("")
   const [isAddingTag, setIsAddingTag] = useState(false)
-  const [isEditMode, setIsEditMode] = useState(false)
+  const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false)
 
-  // Folder edit modal state
   const [isEditModalOpen, setIsEditModalOpen] = useState(false)
   const [currentAction, setCurrentAction] = useState<FolderAction>("create")
   const [currentFolder, setCurrentFolder] = useState<FolderStructure | null>(null)
-
-  const handleViewSelect = (view: ViewType) => {
-    setSelectedView(view)
-    setSelectedFolder(null)
-    setSelectedTag(null)
-  }
+  const [rootItems, setRootItems] = useState<Item[]>([])
 
   const handleFolderSelect = (folderPath: string) => {
     setSelectedFolder(folderPath)
-    setSelectedView("all")
     setSelectedTag(null)
   }
 
   const handleTagSelect = (tag: string) => {
     setSelectedTag(tag)
-    setSelectedView("all")
     setSelectedFolder(null)
   }
 
-  const handleAddTag = () => {
+  const handleAddTagInput = () => {
     setIsAddingTag(true)
   }
 
@@ -123,206 +128,279 @@ export function Sidebar({
     setCurrentFolder(null)
   }
 
-  return (
-    <div className="w-64 border-r border-border bg-muted/30 flex flex-col h-full">
-      <div className="p-4 border-b border-border flex items-center justify-between">
-        <h1 className="font-semibold text-xl">Spark</h1>
-        <div className="flex items-center gap-2">
-          <Button size="icon" variant="ghost" onClick={onOpenSearch}>
-            <Search className="h-5 w-5" />
-            <span className="sr-only">Search</span>
-          </Button>
-          <DropdownMenu>
-            <DropdownMenuTrigger asChild>
-              <Button size="icon" variant="ghost">
-                <Plus className="h-5 w-5" />
-                <span className="sr-only">Create new item</span>
-              </Button>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent align="end">
-              <DropdownMenuItem onClick={() => onCreateItem("note")}>
-                <FileText className="mr-2 h-4 w-4" />
-                <span>New Note</span>
-              </DropdownMenuItem>
-              <DropdownMenuItem onClick={() => onCreateItem("link")}>
-                <LinkIcon className="mr-2 h-4 w-4" />
-                <span>Add Link</span>
-              </DropdownMenuItem>
-              <DropdownMenuItem onClick={() => onCreateItem("image")}>
-                <ImageIcon className="mr-2 h-4 w-4" />
-                <span>Upload Image</span>
-              </DropdownMenuItem>
-              <DropdownMenuItem onClick={() => onCreateItem("file")}>
-                <File className="mr-2 h-4 w-4" />
-                <span>Upload File</span>
-              </DropdownMenuItem>
-            </DropdownMenuContent>
-          </DropdownMenu>
-        </div>
-      </div>
+  useEffect(() => {
+    if (Array.isArray(items)) {
+      setRootItems(items.filter(item => item.folder === null));
+    } else {
+      setRootItems([]);
+    }
+  }, [items]);
 
-      <ScrollArea className="flex-1">
-        <div className="p-2">
-          <nav className="space-y-1">
-            <Button
-              variant={selectedView === "all" && !selectedFolder && !selectedTag ? "secondary" : "ghost"}
-              className="w-full justify-start"
-              onClick={() => handleViewSelect("all")}
-            >
-              <Home className="mr-2 h-4 w-4" />
-              <span>Home</span>
-            </Button>
-            <Button
-              variant={selectedView === "notes" ? "secondary" : "ghost"}
-              className="w-full justify-start"
-              onClick={() => handleViewSelect("notes")}
-            >
-              <FileText className="mr-2 h-4 w-4" />
-              <span>Notes</span>
-            </Button>
-            <Button
-              variant={selectedView === "links" ? "secondary" : "ghost"}
-              className="w-full justify-start"
-              onClick={() => handleViewSelect("links")}
-            >
-              <LinkIcon className="mr-2 h-4 w-4" />
-              <span>Links</span>
-            </Button>
-            <Button
-              variant={selectedView === "images" ? "secondary" : "ghost"}
-              className="w-full justify-start"
-              onClick={() => handleViewSelect("images")}
-            >
-              <ImageIcon className="mr-2 h-4 w-4" />
-              <span>Images</span>
-            </Button>
-            <Button
-              variant={selectedView === "files" ? "secondary" : "ghost"}
-              className="w-full justify-start"
-              onClick={() => handleViewSelect("files")}
-            >
-              <File className="mr-2 h-4 w-4" />
-              <span>Files</span>
-            </Button>
-          </nav>
+  const sidebarWidth = isSidebarCollapsed ? "w-16" : "w-72"
 
-          <div className="mt-6">
-            <div className="flex items-center justify-between mb-1">
-              <button
-                className="flex items-center text-sm font-medium p-2 hover:bg-muted rounded-md"
-                onClick={() => setIsFoldersExpanded(!isFoldersExpanded)}
-              >
-                {isFoldersExpanded ? (
-                  <ChevronDown className="h-4 w-4 mr-1" />
-                ) : (
-                  <ChevronRight className="h-4 w-4 mr-1" />
-                )}
-                <Folder className="h-4 w-4 mr-2" />
-                <span>Folders</span>
-              </button>
-              <div className="flex items-center">
+  if (isSidebarCollapsed) {
+    return (
+      <TooltipProvider delayDuration={0}>
+        <div
+          className={cn(
+            "flex flex-col items-center justify-between h-full py-4 bg-background border-r border-border",
+            sidebarWidth
+          )}
+        >
+          <div className="flex flex-col items-center gap-3 w-full">
+            <Tooltip>
+              <TooltipTrigger asChild>
                 <Button
-                  variant={isEditMode ? "secondary" : "ghost"}
-                  size="icon"
-                  className="h-7 w-7"
-                  onClick={() => setIsEditMode(!isEditMode)}
+                  variant="ghost"
+                  className="w-10 h-10 p-0 rounded-lg"
+                  onClick={() => setIsSidebarCollapsed(false)}
                 >
-                  <Edit className="h-4 w-4" />
-                  <span className="sr-only">{isEditMode ? "Exit Edit Mode" : "Edit Folders"}</span>
+                  <ChevronRight className="h-5 w-5" />
                 </Button>
-                {isEditMode && (
-                  <Button
-                    variant="ghost"
-                    size="icon"
-                    className="h-7 w-7"
-                    onClick={() => handleFolderAction("create", null)}
-                  >
-                    <FolderPlus className="h-4 w-4" />
-                    <span className="sr-only">Add folder</span>
-                  </Button>
-                )}
-              </div>
-            </div>
+              </TooltipTrigger>
+              <TooltipContent side="right">Expand Sidebar</TooltipContent>
+            </Tooltip>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button
+                  variant="ghost"
+                  className="w-10 h-10 p-0 rounded-lg"
+                  onClick={onOpenSearch}
+                >
+                  <Search className="h-5 w-5" />
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent side="right">Search</TooltipContent>
+            </Tooltip>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <DropdownMenu>
+                  <DropdownMenuTrigger asChild>
+                    <Button variant="ghost" className="w-10 h-10 p-0 rounded-lg">
+                      <Plus className="h-5 w-5" />
+                    </Button>
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent side="right" align="start">
+                    <DropdownMenuItem onClick={() => { onCreateItem("note"); setIsSidebarCollapsed(false); }}>
+                      <FileText className="mr-2 h-4 w-4" /> New Note
+                    </DropdownMenuItem>
+                    <DropdownMenuItem onClick={() => { onCreateItem("link"); setIsSidebarCollapsed(false); }}>
+                      <LinkIcon className="mr-2 h-4 w-4" /> New Link
+                    </DropdownMenuItem>
+                  </DropdownMenuContent>
+                </DropdownMenu>
+              </TooltipTrigger>
+              <TooltipContent side="right">New Item</TooltipContent>
+            </Tooltip>
+          </div>
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <Button variant="ghost" className="w-10 h-10 p-0 rounded-lg">
+                <Settings2 className="h-5 w-5" />
+              </Button>
+            </TooltipTrigger>
+            <TooltipContent side="right">Settings</TooltipContent>
+          </Tooltip>
+        </div>
+      </TooltipProvider>
+    )
+  }
 
-            {isFoldersExpanded && (
-              <div className="ml-2 mt-1">
+  return (
+    <TooltipProvider delayDuration={0}>
+      <div
+        className={cn(
+          "flex flex-col h-full bg-background border-r border-border transition-all duration-200",
+          sidebarWidth
+        )}
+      >
+        <div className="flex items-center justify-between p-3 border-b border-border">
+          <h1 className="text-lg font-semibold text-foreground">Spark</h1>
+          <div className="flex items-center gap-1">
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button variant="ghost" size="icon" className="h-8 w-8" onClick={onOpenSearch}>
+                  <Search className="h-4 w-4" />
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent>Search</TooltipContent>
+            </Tooltip>
+            <DropdownMenu>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <DropdownMenuTrigger asChild>
+                    <Button variant="ghost" size="icon" className="h-8 w-8">
+                      <Plus className="h-4 w-4" />
+                    </Button>
+                  </DropdownMenuTrigger>
+                </TooltipTrigger>
+                <TooltipContent>New Item</TooltipContent>
+              </Tooltip>
+              <DropdownMenuContent align="end">
+                <DropdownMenuItem onClick={() => onCreateItem("note")}>
+                  <FileText className="mr-2 h-4 w-4" /> New Note
+                </DropdownMenuItem>
+                <DropdownMenuItem onClick={() => onCreateItem("link")}>
+                  <LinkIcon className="mr-2 h-4 w-4" /> New Link
+                </DropdownMenuItem>
+                <DropdownMenuItem onClick={() => onCreateItem("image")}>
+                  <ImageIcon className="mr-2 h-4 w-4" /> Upload Image
+                </DropdownMenuItem>
+                <DropdownMenuItem onClick={() => onCreateItem("file")}>
+                  <FileIcon className="mr-2 h-4 w-4" /> Upload File
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className="h-8 w-8"
+                  onClick={() => setIsSidebarCollapsed(true)}
+                >
+                  <ChevronLeft className="h-4 w-4" />
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent>Collapse Sidebar</TooltipContent>
+            </Tooltip>
+          </div>
+        </div>
+
+        <ScrollArea className="flex-1">
+          <div className="p-2 space-y-3">
+            <div className="space-y-1">
+              <div className="flex items-center justify-between px-2 py-1">
+                <button
+                  className="flex items-center text-sm font-medium text-muted-foreground hover:text-foreground transition-colors"
+                  onClick={() => setIsFoldersExpanded(!isFoldersExpanded)}
+                >
+                  {isFoldersExpanded ? (
+                    <ChevronDown className="h-4 w-4 mr-1" />
+                  ) : (
+                    <ChevronRight className="h-4 w-4 mr-1" />
+                  )}
+                  Home
+                </button>
+                <div className="flex items-center gap-0.5">
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                        <Button
+                            variant="ghost"
+                            size="icon"
+                            className="h-7 w-7"
+                            onClick={() => handleFolderAction("create", null)}
+                        >
+                            <FolderPlus className="h-4 w-4" />
+                        </Button>
+                    </TooltipTrigger>
+                    <TooltipContent>New Root Folder</TooltipContent>
+                  </Tooltip>
+                </div>
+              </div>
+              {isFoldersExpanded && (
                 <FolderTree
                   folders={folderStructure}
                   selectedFolder={selectedFolder}
                   onSelectFolder={handleFolderSelect}
                   onFolderAction={handleFolderAction}
                   getItemsByFolder={getItemsByFolder}
-                  isEditMode={isEditMode}
+                  onMoveItem={onMoveItem}
+                  onReorderItem={onReorderItem}
+                  onMoveFolder={onMoveFolder}
+                  onSelectItem={onSelectItem}
+                  rootItems={rootItems}
                 />
-              </div>
-            )}
-          </div>
-
-          <div className="mt-4">
-            <div className="flex items-center justify-between mb-1">
-              <button
-                className="flex items-center text-sm font-medium p-2 hover:bg-muted rounded-md"
-                onClick={() => setIsTagsExpanded(!isTagsExpanded)}
-              >
-                {isTagsExpanded ? <ChevronDown className="h-4 w-4 mr-1" /> : <ChevronRight className="h-4 w-4 mr-1" />}
-                <Tag className="h-4 w-4 mr-2" />
-                <span>Tags</span>
-              </button>
-              <Button variant="ghost" size="icon" className="h-7 w-7" onClick={handleAddTag}>
-                <TagPlus className="h-4 w-4" />
-                <span className="sr-only">Add tag</span>
-              </Button>
+              )}
             </div>
 
-            {isTagsExpanded && (
-              <div className="ml-6 mt-1 space-y-1">
-                {isAddingTag && (
-                  <form onSubmit={handleTagNameSubmit} className="flex items-center mb-2">
-                    <Input
-                      value={newTagName}
-                      onChange={(e) => setNewTagName(e.target.value)}
-                      placeholder="Tag name"
-                      className="h-7 text-sm"
-                      autoFocus
-                      onBlur={() => {
-                        if (!newTagName.trim()) {
-                          setIsAddingTag(false)
-                        }
-                      }}
-                    />
-                  </form>
-                )}
-                {tags.map((tag) => (
-                  <Button
-                    key={tag}
-                    variant={selectedTag === tag ? "secondary" : "ghost"}
-                    className="w-full justify-start text-sm h-8"
-                    onClick={() => handleTagSelect(tag)}
-                  >
-                    {tag}
-                  </Button>
-                ))}
-                {tags.length === 0 && !isAddingTag && (
-                  <p className="text-xs text-muted-foreground px-2 py-1">No tags yet</p>
-                )}
+            <div className="space-y-1">
+              <div className="flex items-center justify-between px-2 py-1">
+                <button
+                  className="flex items-center text-sm font-medium text-muted-foreground hover:text-foreground transition-colors"
+                  onClick={() => setIsTagsExpanded(!isTagsExpanded)}
+                >
+                  {isTagsExpanded ? (
+                    <ChevronDown className="h-4 w-4 mr-1" />
+                  ) : (
+                    <ChevronRight className="h-4 w-4 mr-1" />
+                  )}
+                  Tags
+                </button>
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <Button variant="ghost" size="icon" className="h-7 w-7" onClick={handleAddTagInput}>
+                      <TagPlusIcon className="h-3.5 w-3.5" />
+                    </Button>
+                  </TooltipTrigger>
+                  <TooltipContent>New Tag</TooltipContent>
+                </Tooltip>
               </div>
-            )}
+              {isTagsExpanded && (
+                <div className="pl-4 pr-2 space-y-0.5">
+                  {isAddingTag && (
+                    <form onSubmit={handleTagNameSubmit} className="mb-1">
+                      <input
+                        type="text"
+                        value={newTagName}
+                        onChange={(e) => setNewTagName(e.target.value)}
+                        placeholder="New tag..."
+                        className="w-full h-7 px-2 text-sm border border-input rounded-md bg-transparent focus:ring-1 focus:ring-ring focus:outline-none"
+                        autoFocus
+                        onBlur={() => {
+                          if (!newTagName.trim()) setIsAddingTag(false)
+                        }}
+                      />
+                    </form>
+                  )}
+                  {tags.length > 0 ? (
+                    tags.map((tag) => (
+                      <Button
+                        key={tag}
+                        variant={selectedTag === tag ? "secondary" : "ghost"}
+                        size="sm"
+                        className="w-full justify-start h-7 text-sm truncate"
+                        onClick={() => handleTagSelect(tag)}
+                      >
+                        <TagIcon className="h-3.5 w-3.5 mr-1.5 text-muted-foreground" />
+                        {tag}
+                      </Button>
+                    ))
+                  ) : (
+                    !isAddingTag && <p className="text-xs text-muted-foreground px-2 py-1">No tags yet.</p>
+                  )}
+                </div>
+              )}
+            </div>
           </div>
+        </ScrollArea>
+        
+        <div className="p-2 border-t border-border">
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <Button variant="ghost" className="w-full justify-start">
+                <Settings2 className="h-4 w-4 mr-2" /> Settings
+              </Button>
+            </TooltipTrigger>
+            <TooltipContent>Settings</TooltipContent>
+          </Tooltip>
         </div>
-      </ScrollArea>
 
-      <FolderEditModal
-        isOpen={isEditModalOpen}
-        onClose={handleEditModalClose}
-        action={currentAction}
-        folder={currentFolder}
-        folderStructure={folderStructure}
-        onCreateFolder={onAddFolder}
-        onRenameFolder={onRenameFolder}
-        onDeleteFolder={onDeleteFolder}
-        onMoveFolder={onMoveFolder}
-        onCustomizeFolder={onCustomizeFolder}
-      />
-    </div>
+        <FolderEditModal
+          isOpen={isEditModalOpen}
+          onClose={handleEditModalClose}
+          action={currentAction}
+          folder={currentFolder}
+          folderStructure={folderStructure}
+          onCreateFolder={onAddFolder}
+          onRenameFolder={onRenameFolder}
+          onDeleteFolder={onDeleteFolder}
+          onMoveFolder={(folderId, newParentId) => {
+            console.log("Move folder action in modal:", folderId, newParentId)
+          }}
+          onCustomizeFolder={onCustomizeFolder}
+        />
+      </div>
+    </TooltipProvider>
   )
 }
