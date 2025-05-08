@@ -221,7 +221,7 @@ export function Sidebar({
         )}
       >
         <div className="flex items-center justify-between p-3 border-b border-border">
-          <h1 className="text-lg font-semibold text-foreground">Spark</h1>
+          <h1 className="text-lg font-semibold text-foreground select-none">Spark</h1>
           <div className="flex items-center gap-2">
             <Tooltip>
               <TooltipTrigger asChild>
